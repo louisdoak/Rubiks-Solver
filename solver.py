@@ -19,6 +19,13 @@ def softmax(x):
 def cross_entropy(y_true, y_pred):
     return -((y_true * torch.log(y_pred + 1e-8)).sum(dim=1)).float().mean()
 
+def adam_step(W, dW, m, v, t, lr=1e-3, beta1=0.9, beta2=0.999, eps=1e-8):
+    m.mul_(beta1).add_(dW, alpha=1 - beta1)
+    v.mul_(beta2).addcmul_(dW, dW, value=1 - beta2)
+    m_hat = m / (1 - beta1**t)
+    v_hat = v / (1 - beta2**t)
+    W.sub_(lr * m_hat / (v_hat.sqrt() + eps))
+
 def train(X_full, y_onehot_full, loadWeights):
     with torch.no_grad():
         Xtest = torch.from_numpy(np.load("Xtest.npy")).float().to(dev)
@@ -41,6 +48,19 @@ def train(X_full, y_onehot_full, loadWeights):
         b1 = torch.zeros(1, H1, device=dev)
         b2 = torch.zeros(1, H2, device=dev)
         b3 = torch.zeros(1, output_nodes, device=dev)
+        #ADAM
+        W1m = torch.zeros_like(W1)
+        W1v = torch.zeros_like(W1)
+        W2m = torch.zeros_like(W2)
+        W2v = torch.zeros_like(W2)
+        W3m = torch.zeros_like(W3)
+        W3v = torch.zeros_like(W3)
+        b1m = torch.zeros_like(b1)
+        b1v = torch.zeros_like(b1)
+        b2m = torch.zeros_like(b2)
+        b2v = torch.zeros_like(b2)
+        b3m = torch.zeros_like(b3)
+        b3v = torch.zeros_like(b3)
 
         if loadWeights:
             torch.from_numpy(np.load("X.npy")).float().to(dev)
@@ -96,15 +116,15 @@ def train(X_full, y_onehot_full, loadWeights):
             dZ1 = dA1 * (Z1 > 0)
             dW1 = X.T @ dZ1
             db1 = dZ1.sum(dim=0, keepdim=True)
-
+            
             # update
-            W1 -= lr * dW1
-            W2 -= lr * dW2
-            W3 -= lr * dW3
-
-            b1 -= lr * db1
-            b2 -= lr * db2
-            b3 -= lr * db3
+            t=i+1
+            adam_step(W1, dW1, W1m, W1v, t)
+            adam_step(b1, db1, b1m, b1v, t)
+            adam_step(W2, dW2, W2m, W2v, t)
+            adam_step(b2, db2, b2m, b2v, t)
+            adam_step(W3, dW3, W3m, W3v, t)
+            adam_step(b3, db3, b3m, b3v, t)
 
             if i % 20 == 0:
                 print(
@@ -131,7 +151,7 @@ def predict(X, W1, b1, W2, b2, W3, b3, sample=False):
     else:
         return np.argmax(A3[0])
 
-def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=150):
+def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=20000):
     solution = []
 
     solved_cube = {

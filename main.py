@@ -169,7 +169,7 @@ class App(tk.Tk):
         )
 
         self.step = 0
-        self._animate_solve()
+        #self._animate_solve()
             
     def _animate_solve(self):
         if self.step >= len(self.solution):
