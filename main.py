@@ -3,6 +3,8 @@ import rotations
 import solver
 import numpy as np
 import time
+import torch
+dev = "cuda" if torch.cuda.is_available() else "cpu"
 
 class App(tk.Tk):
     def __init__(self):
@@ -158,12 +160,12 @@ class App(tk.Tk):
     def _solve(self):
         self.solution = solver.solve(
             self.faces,
-            np.load("W1.npy"),
-            np.load("b1.npy"),
-            np.load("W2.npy"),
-            np.load("b2.npy"),
-            np.load("W3.npy"),
-            np.load("b3.npy")
+            torch.from_numpy(np.load("W1.npy")).float().to(dev),
+            torch.from_numpy(np.load("b1.npy")).float().to(dev),
+            torch.from_numpy(np.load("W2.npy")).float().to(dev),
+            torch.from_numpy(np.load("b2.npy")).float().to(dev),
+            torch.from_numpy(np.load("W3.npy")).float().to(dev),
+            torch.from_numpy(np.load("b3.npy")).float().to(dev)
         )
 
         self.step = 0
@@ -200,17 +202,17 @@ class App(tk.Tk):
         self.update_ui()
 
     def _train(self):
-        X = np.load("X.npy")
-        y = np.load("y.npy")
+        X = torch.from_numpy(np.load("X.npy")).float().to(dev)
+        y = torch.from_numpy(np.load("y.npy")).float().to(dev)
         print(self.loadWeights.get())
         W1, b1, W2, b2, W3, b3 = solver.train(X, y, self.loadWeights.get())
 
-        np.save("W1.npy", W1)
-        np.save("b1.npy", b1)
-        np.save("W2.npy", W2)
-        np.save("b2.npy", b2)
-        np.save("W3.npy", W3)
-        np.save("b3.npy", b3)
+        np.save("W1.npy", W1.cpu().numpy())
+        np.save("b1.npy", b1.cpu().numpy())
+        np.save("W2.npy", W2.cpu().numpy())
+        np.save("b2.npy", b2.cpu().numpy())
+        np.save("W3.npy", W3.cpu().numpy())
+        np.save("b3.npy", b3.cpu().numpy())
 
         print("Training complete")
 

@@ -1,5 +1,7 @@
 import numpy as np
 import rotations
+import torch
+dev = "cuda" if torch.cuda.is_available() else "cpu"
 
 ACTIONS = ["L","L'","R","R'","U","U'","D","D'","F","F'","B","B'"]
 
@@ -10,108 +12,112 @@ def sigmoid(X):
     return 1 / (1 + np.exp(-X))
 
 def softmax(x):
-    x = x - np.max(x, axis=1, keepdims=True)
-    exp = np.exp(x)
-    return exp / np.sum(exp, axis=1, keepdims=True)
+    x = x - x.max(dim=1, keepdim=True).values
+    exp = torch.exp(x)
+    return exp / exp.sum(dim=1, keepdims=True)
 
 def cross_entropy(y_true, y_pred):
-    return -np.mean(np.sum(y_true * np.log(y_pred + 1e-8), axis=1))
+    return -((y_true * torch.log(y_pred + 1e-8)).sum(dim=1)).float().mean()
 
 def train(X, y_onehot, loadWeights):
-    Xtest = np.load("Xtest.npy")
-    ytest = np.load("ytest.npy")
-    H1 = 256
-    H2 = 256
-    input_nodes = X.shape[1]
-    output_nodes = 12
+    with torch.no_grad():
+        Xtest = torch.from_numpy(np.load("Xtest.npy")).float().to(dev)
+        ytest = torch.from_numpy(np.load("ytest.npy")).float().to(dev)
+        print("X", X.shape, "y", y_onehot.shape, "Xtest", Xtest.shape, "ytest", ytest.shape)
 
-    lr = 0.01
-    epochs = 100
-    m = X.shape[0]
+        H1 = 4196
+        H2 = 2048
+        input_nodes = X.shape[1]
+        output_nodes = 12
 
-    # weights
-    W1 = np.random.randn(input_nodes, H1) * np.sqrt(2 / input_nodes)
-    W2 = np.random.randn(H1, H2) * np.sqrt(2 / H1)
-    W3 = np.random.randn(H2, output_nodes) * np.sqrt(2 / H2)
-    b1 = np.zeros((1, H1))
-    b2 = np.zeros((1, H2))
-    b3 = np.zeros((1, output_nodes))
+        lr = 0.01
+        epochs = 100
+        m = X.shape[0]
 
-    if loadWeights:
-        W1 = np.load("W1.npy")
-        W2 = np.load("W2.npy")
-        W3 = np.load("W3.npy")
-        b1 = np.load("b1.npy")
-        b2 = np.load("b2.npy")
-        b3 = np.load("b3.npy")
+        # weights
+        W1 = (torch.randn(input_nodes, H1) * (2 / input_nodes)**0.5).to(dev)
+        W2 = (torch.randn(H1, H2) * (2 / H1)**0.5).to(dev)
+        W3 = (torch.randn(H2, output_nodes) * (2 / H2)**0.5).to(dev)
+        b1 = torch.zeros(1, H1, device=dev)
+        b2 = torch.zeros(1, H2, device=dev)
+        b3 = torch.zeros(1, output_nodes, device=dev)
 
-    for i in range(epochs):
-        # test set
-        Z1 = Xtest @ W1 + b1
-        A1 = np.maximum(0, Z1)
+        if loadWeights:
+            torch.from_numpy(np.load("X.npy")).float().to(dev)
+            W1 = torch.from_numpy(np.load("W1.npy")).float().to(dev)
+            W2 = torch.from_numpy(np.load("W2.npy")).float().to(dev)
+            W3 = torch.from_numpy(np.load("W3.npy")).float().to(dev)
+            b1 = torch.from_numpy(np.load("b1.npy")).float().to(dev)
+            b2 = torch.from_numpy(np.load("b2.npy")).float().to(dev)
+            b3 = torch.from_numpy(np.load("b3.npy")).float().to(dev)
 
-        Z2 = A1 @ W2 + b2
-        A2 = np.maximum(0, Z2)
+        for i in range(epochs):
+            # test set
+            Z1 = Xtest @ W1 + b1
+            A1 = Z1.clamp(min=0)
 
-        Z3 = A2 @ W3 + b3
-        A3 = softmax(Z3)
+            Z2 = A1 @ W2 + b2
+            A2 = Z2.clamp(min=0)
 
-        predictions = np.argmax(A3, axis=1)
-        actual = np.argmax(ytest, axis=1)
-        accuracy = np.mean(predictions == actual)
+            Z3 = A2 @ W3 + b3
+            A3 = softmax(Z3)
 
-        # forward
-        Z1 = X @ W1 + b1
-        A1 = np.maximum(0, Z1)
+            predictions = A3.argmax(dim=1)
+            actual = ytest.argmax(dim=1)
+            accuracy = (predictions == actual).float().mean().item()
 
-        Z2 = A1 @ W2 + b2
-        A2 = np.maximum(0, Z2)
+            # forward
+            Z1 = X @ W1 + b1
+            A1 = Z1.clamp(min=0)
 
-        Z3 = A2 @ W3 + b3
-        A3 = softmax(Z3)
-        # loss
-        loss = cross_entropy(y_onehot, A3)
+            Z2 = A1 @ W2 + b2
+            A2 = Z2.clamp(min=0)
 
-        # backprop
-        dZ3 = (A3 - y_onehot) / m
-        dW3 = A2.T @ dZ3
-        db3 = np.sum(dZ3, axis=0, keepdims=True)
+            Z3 = A2 @ W3 + b3
+            A3 = softmax(Z3)
+            # loss
+            loss = cross_entropy(y_onehot, A3)
 
-        dA2 = dZ3 @ W3.T
-        dZ2 = dA2 * (Z2 > 0)
-        dW2 = A1.T @ dZ2
-        db2 = np.sum(dZ2, axis=0, keepdims=True)
+            # backprop
+            dZ3 = (A3 - y_onehot) / m
+            dW3 = A2.T @ dZ3
+            db3 = dZ3.sum(dim=0, keepdim=True)
 
-        dA1 = dZ2 @ W2.T
-        dZ1 = dA1 * (Z1 > 0)
-        dW1 = X.T @ dZ1
-        db1 = np.sum(dZ1, axis=0, keepdims=True)
+            dA2 = dZ3 @ W3.T
+            dZ2 = dA2 * (Z2 > 0)
+            dW2 = A1.T @ dZ2
+            db2 = dZ2.sum(dim=0, keepdim=True)
 
-        # update
-        W1 -= lr * dW1
-        W2 -= lr * dW2
-        W3 -= lr * dW3
+            dA1 = dZ2 @ W2.T
+            dZ1 = dA1 * (Z1 > 0)
+            dW1 = X.T @ dZ1
+            db1 = dZ1.sum(dim=0, keepdim=True)
 
-        b1 -= lr * db1
-        b2 -= lr * db2
-        b3 -= lr * db3
+            # update
+            W1 -= lr * dW1
+            W2 -= lr * dW2
+            W3 -= lr * dW3
 
-        if i % 20 == 0:
-            print(
-                f"Epoch {i}/{epochs} - "
-                f"loss: {loss:.6f} - "
-                f"accuracy: {accuracy:.2%}"
-            )
-            
+            b1 -= lr * db1
+            b2 -= lr * db2
+            b3 -= lr * db3
 
-    return W1, b1, W2, b2, W3, b3
+            if i % 20 == 0:
+                print(
+                    f"Epoch {i}/{epochs} - "
+                    f"loss: {loss.item():.6f} - "
+                    f"accuracy: {accuracy:.2%}"
+                )
+                
+
+        return W1, b1, W2, b2, W3, b3
 
 def predict(X, W1, b1, W2, b2, W3, b3, sample=False):
     Z1 = X @ W1 + b1
-    A1 = np.maximum(0, Z1)
+    A1 = Z1.clamp(min=0)
 
     Z2 = A1 @ W2 + b2
-    A2 = np.maximum(0, Z2)
+    A2 = Z2.clamp(min=0)
 
     Z3 = A2 @ W3 + b3
     A3 = softmax(Z3)
@@ -145,7 +151,7 @@ def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=150):
             break
 
         # Convert cube state into something hashable
-        key = encode_cube(current).tobytes()
+        key = str(current)
 
         # Check for repeated state
         if key in visited:
@@ -160,7 +166,7 @@ def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=150):
             X, W1, b1, W2, b2, W3, b3
         )
 
-        order = np.argsort(probs)[::-1]
+        order = torch.argsort(probs, descending=True).tolist()
 
         print("Top predictions:")
         for idx in order[:3]:
@@ -188,4 +194,4 @@ def encode_cube(faces):
                 one_hot[color_map[faces[face][r][c]]] = 1
                 X.extend(one_hot)
 
-    return np.array(X)
+    return torch.tensor(X, dtype=torch.float32, device=dev)
