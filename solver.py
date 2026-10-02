@@ -19,20 +19,20 @@ def softmax(x):
 def cross_entropy(y_true, y_pred):
     return -((y_true * torch.log(y_pred + 1e-8)).sum(dim=1)).float().mean()
 
-def train(X, y_onehot, loadWeights):
+def train(X_full, y_onehot_full, loadWeights):
     with torch.no_grad():
         Xtest = torch.from_numpy(np.load("Xtest.npy")).float().to(dev)
         ytest = torch.from_numpy(np.load("ytest.npy")).float().to(dev)
-        print("X", X.shape, "y", y_onehot.shape, "Xtest", Xtest.shape, "ytest", ytest.shape)
+        print("X", X_full.shape, "y", y_onehot_full.shape, "Xtest", Xtest.shape, "ytest", ytest.shape)
 
         H1 = 4196
         H2 = 2048
-        input_nodes = X.shape[1]
+        input_nodes = X_full.shape[1]
         output_nodes = 12
 
-        lr = 0.01
+        lr = 0.5
         epochs = 100
-        m = X.shape[0]
+        m = X_full.shape[0]
 
         # weights
         W1 = (torch.randn(input_nodes, H1) * (2 / input_nodes)**0.5).to(dev)
@@ -52,6 +52,10 @@ def train(X, y_onehot, loadWeights):
             b3 = torch.from_numpy(np.load("b3.npy")).float().to(dev)
 
         for i in range(epochs):
+            batch_size = 512
+            idx = torch.randint(0, m, (batch_size,), device=dev)
+            X = X_full[idx]
+            y_onehot = y_onehot_full[idx]
             # test set
             Z1 = Xtest @ W1 + b1
             A1 = Z1.clamp(min=0)
@@ -79,7 +83,7 @@ def train(X, y_onehot, loadWeights):
             loss = cross_entropy(y_onehot, A3)
 
             # backprop
-            dZ3 = (A3 - y_onehot) / m
+            dZ3 = (A3 - y_onehot) / batch_size
             dW3 = A2.T @ dZ3
             db3 = dZ3.sum(dim=0, keepdim=True)
 
@@ -172,14 +176,15 @@ def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=150):
         for idx in order[:3]:
             print(f"  {ACTIONS[idx]}: {probs[idx]:.3f}")
 
-        move_index = order[0]
-        move = ACTIONS[move_index]
+        for a in order:
+            potential_state = rotations.rotate(current, ACTIONS[a])
+            if str(potential_state) not in visited:
+                print("Chosen:", ACTIONS[a])
+                break
 
-        print("Chosen:", move)
+        solution.append(ACTIONS[a])
 
-        solution.append(move)
-
-        current = rotations.rotate(current, move)
+        current = potential_state
 
     return solution
 
