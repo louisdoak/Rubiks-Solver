@@ -11,6 +11,7 @@ class App(tk.Tk):
         self.geometry("1200x750")
         self.configure(bg="#1e1e1e")
         self.resizable(True, True)
+        self.loadWeights = tk.BooleanVar()
 
         # Easy-to-edit face colors
         self.color_map = {
@@ -73,6 +74,13 @@ class App(tk.Tk):
                 relief="flat", padx=10, pady=4,
                 cursor="hand2"
             ).pack(side="left", padx=12)
+        tk.Checkbutton(
+            bar, text="Continue old",
+            bg="#F0F0F0", fg="#000000",
+            font=("Segoe UI", 16, "bold"),
+            relief="flat", padx=10, pady=4,
+            cursor="hand2", variable=self.loadWeights
+        ).pack(side="left", padx=12)
         tk.Button(
                 bar, text="Debug",
                 command=self._debug,
@@ -172,7 +180,7 @@ class App(tk.Tk):
         self.update_ui()
 
         self.step += 1
-        self.after(150, self._animate_solve)
+        self.after(10, self._animate_solve)
 
     def _scramble(self):
         turns = ['L','R','U','D','F','B','L\'','R\'','U\'','D\'','F\'','B\'']
@@ -194,8 +202,8 @@ class App(tk.Tk):
     def _train(self):
         X = np.load("X.npy")
         y = np.load("y.npy")
-
-        W1, b1, W2, b2, W3, b3 = solver.train(X, y)
+        print(self.loadWeights.get())
+        W1, b1, W2, b2, W3, b3 = solver.train(X, y, self.loadWeights.get())
 
         np.save("W1.npy", W1)
         np.save("b1.npy", b1)
@@ -219,13 +227,5 @@ class App(tk.Tk):
                     )
 
 if __name__ == "__main__":
-    ACTIONS = ["L","L'","R","R'","U","U'","D","D'","F","F'","B","B'"]
-    sol = list(ACTIONS[np.argmax(label)] for label in np.load("y.npy"))[::-1]
-    print(" ".join(sol))
-
     app = App()
-    for m in sol:
-        app._rotate_side(m)
-        app._rotate_side(m)
-        app._rotate_side(m)
     app.mainloop()

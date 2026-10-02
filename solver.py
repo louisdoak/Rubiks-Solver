@@ -17,14 +17,16 @@ def softmax(x):
 def cross_entropy(y_true, y_pred):
     return -np.mean(np.sum(y_true * np.log(y_pred + 1e-8), axis=1))
 
-def train(X, y_onehot):
-    H1 = 128
-    H2 = 128
+def train(X, y_onehot, loadWeights):
+    Xtest = np.load("Xtest.npy")
+    ytest = np.load("ytest.npy")
+    H1 = 256
+    H2 = 256
     input_nodes = X.shape[1]
     output_nodes = 12
 
     lr = 0.01
-    epochs = 5000
+    epochs = 100
     m = X.shape[0]
 
     # weights
@@ -35,7 +37,28 @@ def train(X, y_onehot):
     b2 = np.zeros((1, H2))
     b3 = np.zeros((1, output_nodes))
 
+    if loadWeights:
+        W1 = np.load("W1.npy")
+        W2 = np.load("W2.npy")
+        W3 = np.load("W3.npy")
+        b1 = np.load("b1.npy")
+        b2 = np.load("b2.npy")
+        b3 = np.load("b3.npy")
+
     for i in range(epochs):
+        # test set
+        Z1 = Xtest @ W1 + b1
+        A1 = np.maximum(0, Z1)
+
+        Z2 = A1 @ W2 + b2
+        A2 = np.maximum(0, Z2)
+
+        Z3 = A2 @ W3 + b3
+        A3 = softmax(Z3)
+
+        predictions = np.argmax(A3, axis=1)
+        actual = np.argmax(ytest, axis=1)
+        accuracy = np.mean(predictions == actual)
 
         # forward
         Z1 = X @ W1 + b1
@@ -46,10 +69,6 @@ def train(X, y_onehot):
 
         Z3 = A2 @ W3 + b3
         A3 = softmax(Z3)
-        predictions = np.argmax(A3, axis=1)
-        actual = np.argmax(y_onehot, axis=1)
-        accuracy = np.mean(predictions == actual)
-
         # loss
         loss = cross_entropy(y_onehot, A3)
 
@@ -77,7 +96,7 @@ def train(X, y_onehot):
         b2 -= lr * db2
         b3 -= lr * db3
 
-        if i % 25 == 0:
+        if i % 20 == 0:
             print(
                 f"Epoch {i}/{epochs} - "
                 f"loss: {loss:.6f} - "
@@ -102,7 +121,7 @@ def predict(X, W1, b1, W2, b2, W3, b3, sample=False):
     else:
         return np.argmax(A3[0])
 
-def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=50):
+def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=150):
     solution = []
 
     solved_cube = {
