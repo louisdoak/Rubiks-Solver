@@ -191,7 +191,7 @@ def predict(X, W1, b1, W2, b2, W3, b3, sample=False):
     else:
         return np.argmax(A3[0])
 
-def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=20000):
+def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=20000, verbose=True):
     solution = []
 
     solved_cube = {
@@ -205,6 +205,7 @@ def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=20000):
 
     current = faces
     visited = set()
+    solved=False
 
     for step in range(max_steps):
         if step % 100 == 0:
@@ -213,8 +214,10 @@ def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=20000):
 
         # Check whether solved
         if current == solved_cube:
-            print(step)
-            print("Solved!")
+            if verbose:
+                print(step)
+                print("Solved!")
+            solved=True
             break
 
         # Convert cube state into something hashable
@@ -230,10 +233,12 @@ def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=20000):
 
         order = torch.argsort(probs, descending=True).tolist()
         if step%1000==0:
-            print(step)
-            print("Top predictions:")
+            if verbose:
+                print(step)
+                print("Top predictions:")
             for idx in order[:3]:
-                print(f"  {ACTIONS[idx]}: {probs[idx]:.3f}")
+                if verbose:
+                    print(f"  {ACTIONS[idx]}: {probs[idx]:.3f}")
 
         for a in order:
             potential_state = rotations.rotate(current, ACTIONS[a])
@@ -245,7 +250,7 @@ def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=20000):
 
         current = potential_state
 
-    return solution
+    return solution, solved
 
 def encode_cube(faces):
     color_map = {"W":0,"Y":1,"R":2,"O":3,"G":4,"B":5}

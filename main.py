@@ -4,6 +4,7 @@ import solver
 import numpy as np
 import time
 import torch
+import random as rnd
 dev = "cuda" if torch.cuda.is_available() else "cpu"
 
 class App(tk.Tk):
@@ -194,7 +195,6 @@ class App(tk.Tk):
 
     def _scramble(self):
         turns = ['L','R','U','D','F','B','L\'','R\'','U\'','D\'','F\'','B\'']
-        import random as rnd
         for i in range(20):
             self._rotate_side(turns[rnd.randint(0,11)])
 
@@ -225,19 +225,60 @@ class App(tk.Tk):
         print("Training complete")
 
     def _debug(self):
-        self.solution = solver.solve(
-            self.faces,
-            torch.from_numpy(np.load("W1.npy")).float().to(dev),
-            torch.from_numpy(np.load("b1.npy")).float().to(dev),
-            torch.from_numpy(np.load("W2.npy")).float().to(dev),
-            torch.from_numpy(np.load("b2.npy")).float().to(dev),
-            torch.from_numpy(np.load("W3.npy")).float().to(dev),
-            torch.from_numpy(np.load("b3.npy")).float().to(dev)
-        )
+        W1=torch.from_numpy(np.load("W1.npy")).float().to(dev)
+        b1=torch.from_numpy(np.load("b1.npy")).float().to(dev)
+        W2=torch.from_numpy(np.load("W2.npy")).float().to(dev)
+        b2=torch.from_numpy(np.load("b2.npy")).float().to(dev)
+        W3=torch.from_numpy(np.load("W3.npy")).float().to(dev)
+        b3=torch.from_numpy(np.load("b3.npy")).float().to(dev)
 
-        self.step = 0
+        ACTIONS = ["L","L'","R","R'","U","U'","D","D'","F","F'","B","B'"]
+        depthTest = False
+        if depthTest:
+            depth = 2
+            for depth in range(1,20):
+                success = 0
+                for i in range(1000):
+                    self._reset()
+                    for i in range(depth):
+                        self.faces = rotations.rotate(self.faces, ACTIONS[rnd.randint(0,11)])
+                        self.update_ui()
 
-    
+                    tempSolution = solver.solve(
+                        self.faces,
+                        W1,b1,W2,b2,W3,b3,
+                        verbose=False,
+                        max_steps=20
+                    )
+                    self.step = 0
+                    if len(tempSolution) == depth:
+                        success+=1
+                print(f"Accuracy on depth {depth}: {(success/1000) *100}")
+
+        solveTest=True
+        if solveTest:
+            moveNums = np.array([])
+            success = 0
+            for i in range(1000):
+                print(i)
+                self._reset()
+                self._scramble()
+                tempSolution, solved = solver.solve(
+                    self.faces,
+                    W1,b1,W2,b2,W3,b3,
+                    verbose=False,
+                    max_steps=20000
+                )
+                self.step = 0
+                if solved:
+                    print(f"solved in {len(tempSolution)} moves")
+                    moveNums = np.append(moveNums, len(tempSolution))
+                    success+=1
+            print(f"Solved {(success/1000) *100}% of cubes")
+            print(f"mean:{np.mean(moveNums)}")
+            print(f"median:{np.median(moveNums)}")
+            print(moveNums)
+
     def update_ui(self):
         for face in self.faces:
             for r in range(3):
