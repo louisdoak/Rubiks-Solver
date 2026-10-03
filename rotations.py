@@ -1,4 +1,5 @@
 import copy
+import torch
 
 def rotate_face_cw(face):
     return [
@@ -215,3 +216,17 @@ def rotate(faces, move):
             R[0][2], R[1][2], R[2][2] = temp
 
     return faces
+
+def _build_perms():
+    FACES = ["U", "D", "F", "B", "L", "R"]
+    ACTIONS = ["L", "L'", "R", "R'", "U", "U'", "D", "D'", "F", "F'", "B", "B'"]
+    """Move m sends new_state[i] = old_state[perm[m][i]]. Found by rotating a cube
+    whose 54 stickers are labelled 0..53, using YOUR rotations.rotate."""
+    labelled = {f: [[k*9 + r*3 + c for c in range(3)] for r in range(3)] for k, f in enumerate(FACES)}
+    perms = []
+    for m in ACTIONS:
+        out = rotate(labelled, m)
+        perms.append([out[f][r][c] for f in FACES for r in range(3) for c in range(3)])
+    return torch.tensor(perms, dtype=torch.long)    # (12, 54)
+
+PERMS = _build_perms()

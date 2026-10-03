@@ -2,6 +2,9 @@ import numpy as np
 import rotations
 import torch
 dev = "cuda" if torch.cuda.is_available() else "cpu"
+from rotations import PERMS
+PERMS = PERMS.to(dev)
+SOLVED = torch.tensor([1]*9 + [0]*9 + [4]*9 + [5]*9 + [2]*9 + [3]*9, device=dev)
 
 ACTIONS = ["L","L'","R","R'","U","U'","D","D'","F","F'","B","B'"]
 
@@ -49,20 +52,36 @@ def accuracy_by_depth(X, y_onehot, W1, b1, W2, b2, W3, b3, scramble_len=20):
             print(f"{d:5d} | {acc:7.2%} | {int(mask.sum())}")
         print(f"overall: {correct.mean().item():.2%}")
 
+def make_batch(B, max_depth=20):
+    states = SOLVED.repeat(B, 1) # B solved cubes
+    #depth = torch.randint(1, max_depth + 1, (B,), device=dev) # each cube gets a scramble length
+    depth = torch.where(torch.rand(B, device=dev) < 0.5,
+                    torch.randint(1, max_depth + 1, (B,), device=dev),
+                    torch.randint(8, 17, (B,), device=dev))
+    prev = torch.randint(0, 6, (B,), device=dev) # previous face
+    last = torch.zeros(B, dtype=torch.long, device=dev) # last move applied
+    for t in range(max_depth):
+        face = (prev + 1 + torch.randint(0, 5, (B,), device=dev)) % 6 # any face except the previous one
+        move = face * 2 + torch.randint(0, 2, (B,), device=dev) # cw or acw
+        active = t < depth # cubes still being scrambled
+        states = torch.where(active[:, None], torch.gather(states, 1, PERMS[move]), states)
+        prev = torch.where(active, face, prev)
+        last = torch.where(active, move, last)
+    X = torch.nn.functional.one_hot(states, 6).flatten(1).float() # (B, 324)
+    y = torch.nn.functional.one_hot(last ^ 1, 12).float() # inverse of last move
+    return X, y
+
 def train(X_full, y_onehot_full, loadWeights):
     with torch.no_grad():
         Xtest = torch.from_numpy(np.load("Xtest.npy")).float().to(dev)
         ytest = torch.from_numpy(np.load("ytest.npy")).float().to(dev)
-        print("X", X_full.shape, "y", y_onehot_full.shape, "Xtest", Xtest.shape, "ytest", ytest.shape)
 
-        H1 = 4196
+        H1 = 4096
         H2 = 2048
-        input_nodes = X_full.shape[1]
+        input_nodes = 324
         output_nodes = 12
 
-        lr = 0.5
-        epochs = 1000
-        m = X_full.shape[0]
+        epochs = 5000
 
         # weights
         W1 = (torch.randn(input_nodes, H1) * (2 / input_nodes)**0.5).to(dev)
@@ -86,7 +105,6 @@ def train(X_full, y_onehot_full, loadWeights):
         b3v = torch.zeros_like(b3)
 
         if loadWeights:
-            torch.from_numpy(np.load("X.npy")).float().to(dev)
             W1 = torch.from_numpy(np.load("W1.npy")).float().to(dev)
             W2 = torch.from_numpy(np.load("W2.npy")).float().to(dev)
             W3 = torch.from_numpy(np.load("W3.npy")).float().to(dev)
@@ -96,9 +114,7 @@ def train(X_full, y_onehot_full, loadWeights):
 
         for i in range(epochs):
             batch_size = 512
-            idx = torch.randint(0, m, (batch_size,), device=dev)
-            X = X_full[idx]
-            y_onehot = y_onehot_full[idx]
+            X, y_onehot = make_batch(batch_size)
             # test set
             Z1 = Xtest @ W1 + b1
             A1 = Z1.clamp(min=0)
@@ -154,13 +170,8 @@ def train(X_full, y_onehot_full, loadWeights):
             adam_step(W3, dW3, W3m, W3v, t)
             adam_step(b3, db3, b3m, b3v, t)
 
-            if i % 20 == 0:
-                print(
-                    f"Epoch {i}/{epochs} - "
-                    f"loss: {loss.item():.6f} - "
-                    f"test accuracy: {test_accuracy:.2%} - "
-                    f"train accuracy: {train_accuracy:.2%}"
-                )
+            if i % 50 == 0:
+                print(f"Step {i}/{epochs} - loss: {loss.item():.4f} - test accuracy: {test_accuracy:.2%} - train accuracy: {train_accuracy:.2%}")
                 
         accuracy_by_depth(Xtest, ytest, W1, b1, W2, b2, W3, b3)
         return W1, b1, W2, b2, W3, b3
@@ -196,20 +207,18 @@ def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=20000):
     visited = set()
 
     for step in range(max_steps):
-        print(step)
+        if step % 100 == 0:
+            visited = set()
+
 
         # Check whether solved
         if current == solved_cube:
+            print(step)
             print("Solved!")
             break
 
         # Convert cube state into something hashable
         key = str(current)
-
-        # Check for repeated state
-        if key in visited:
-            print("Loop detected!")
-            break
 
         visited.add(key)
 
@@ -220,15 +229,16 @@ def solve(faces, W1, b1, W2, b2, W3, b3, max_steps=20000):
         )
 
         order = torch.argsort(probs, descending=True).tolist()
-
-        print("Top predictions:")
-        for idx in order[:3]:
-            print(f"  {ACTIONS[idx]}: {probs[idx]:.3f}")
+        if step%1000==0:
+            print(step)
+            print("Top predictions:")
+            for idx in order[:3]:
+                print(f"  {ACTIONS[idx]}: {probs[idx]:.3f}")
 
         for a in order:
             potential_state = rotations.rotate(current, ACTIONS[a])
             if str(potential_state) not in visited:
-                print("Chosen:", ACTIONS[a])
+                #print("Chosen:", ACTIONS[a])
                 break
 
         solution.append(ACTIONS[a])

@@ -169,20 +169,28 @@ class App(tk.Tk):
         )
 
         self.step = 0
-        #self._animate_solve()
+        self._animate_solve()
             
     def _animate_solve(self):
         if self.step >= len(self.solution):
+            self.update_ui()
             return
 
         move = self.solution[self.step]
-        print(move)
 
         self.faces = rotations.rotate(self.faces, move)
-        self.update_ui()
+        if len(self.solution)-self.step < 100:
+            print(move)
+            self.update_ui()
+        if self.step % 50 == 0:
+            print(self.step)
+            self.update_ui()
 
         self.step += 1
-        self.after(10, self._animate_solve)
+        if len(self.solution)-self.step < 100:
+            self.after(80, self._animate_solve)
+        else:
+            self.after(0, self._animate_solve)
 
     def _scramble(self):
         turns = ['L','R','U','D','F','B','L\'','R\'','U\'','D\'','F\'','B\'']
@@ -228,7 +236,7 @@ class App(tk.Tk):
         )
 
         self.step = 0
-        
+
     
     def update_ui(self):
         for face in self.faces:
