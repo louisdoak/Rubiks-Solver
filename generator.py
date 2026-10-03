@@ -150,7 +150,7 @@ if __name__ == "__main__":
 
     # Generate full dataset
     X, y = generate_dataset(
-        samples=5000,
+        samples=50000,
         scramble_len=20
     )
     Xtest, ytest = generate_dataset(
@@ -159,8 +159,8 @@ if __name__ == "__main__":
         )
     np.save("X.npy", X)
     np.save("y.npy", y)
-    np.save("Xtest.npy", X)
-    np.save("ytest.npy", y)
+    np.save("Xtest.npy", Xtest)
+    np.save("ytest.npy", ytest)
 
     print()
     print("Dataset saved.")

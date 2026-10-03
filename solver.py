@@ -26,6 +26,29 @@ def adam_step(W, dW, m, v, t, lr=1e-3, beta1=0.9, beta2=0.999, eps=1e-8):
     v_hat = v / (1 - beta2**t)
     W.sub_(lr * m_hat / (v_hat.sqrt() + eps))
 
+def accuracy_by_depth(X, y_onehot, W1, b1, W2, b2, W3, b3, scramble_len=20):
+    with torch.no_grad():
+        n = (X.shape[0] // scramble_len) * scramble_len   # whole scrambles only
+        X, y_onehot = X[:n], y_onehot[:n]
+
+        Z1 = X @ W1 + b1
+        A1 = Z1.clamp(min=0)
+        Z2 = A1 @ W2 + b2
+        A2 = Z2.clamp(min=0)
+        Z3 = A2 @ W3 + b3          # no softmax needed: biggest logit = biggest probability
+
+        correct = (Z3.argmax(dim=1) == y_onehot.argmax(dim=1)).float()
+
+        # row i belongs to depth scramble_len - (i % scramble_len)
+        depth = scramble_len - (torch.arange(n, device=X.device) % scramble_len)
+
+        print("depth | accuracy | rows")
+        for d in range(1, scramble_len + 1):
+            mask = depth == d
+            acc = correct[mask].mean().item()
+            print(f"{d:5d} | {acc:7.2%} | {int(mask.sum())}")
+        print(f"overall: {correct.mean().item():.2%}")
+
 def train(X_full, y_onehot_full, loadWeights):
     with torch.no_grad():
         Xtest = torch.from_numpy(np.load("Xtest.npy")).float().to(dev)
@@ -38,7 +61,7 @@ def train(X_full, y_onehot_full, loadWeights):
         output_nodes = 12
 
         lr = 0.5
-        epochs = 100
+        epochs = 1000
         m = X_full.shape[0]
 
         # weights
@@ -86,9 +109,9 @@ def train(X_full, y_onehot_full, loadWeights):
             Z3 = A2 @ W3 + b3
             A3 = softmax(Z3)
 
-            predictions = A3.argmax(dim=1)
-            actual = ytest.argmax(dim=1)
-            accuracy = (predictions == actual).float().mean().item()
+            test_predictions = A3.argmax(dim=1)
+            test_actual = ytest.argmax(dim=1)
+            test_accuracy = (test_predictions == test_actual).float().mean().item()
 
             # forward
             Z1 = X @ W1 + b1
@@ -99,6 +122,11 @@ def train(X_full, y_onehot_full, loadWeights):
 
             Z3 = A2 @ W3 + b3
             A3 = softmax(Z3)
+
+            train_predictions = A3.argmax(dim=1)
+            train_actual = y_onehot.argmax(dim=1)
+            train_accuracy = (train_predictions == train_actual).float().mean().item()
+
             # loss
             loss = cross_entropy(y_onehot, A3)
 
@@ -130,10 +158,11 @@ def train(X_full, y_onehot_full, loadWeights):
                 print(
                     f"Epoch {i}/{epochs} - "
                     f"loss: {loss.item():.6f} - "
-                    f"accuracy: {accuracy:.2%}"
+                    f"test accuracy: {test_accuracy:.2%} - "
+                    f"train accuracy: {train_accuracy:.2%}"
                 )
                 
-
+        accuracy_by_depth(Xtest, ytest, W1, b1, W2, b2, W3, b3)
         return W1, b1, W2, b2, W3, b3
 
 def predict(X, W1, b1, W2, b2, W3, b3, sample=False):

@@ -217,7 +217,18 @@ class App(tk.Tk):
         print("Training complete")
 
     def _debug(self):
-        print(np.sum(np.load("y.npy"), axis=0))
+        self.solution = solver.solve(
+            self.faces,
+            torch.from_numpy(np.load("W1.npy")).float().to(dev),
+            torch.from_numpy(np.load("b1.npy")).float().to(dev),
+            torch.from_numpy(np.load("W2.npy")).float().to(dev),
+            torch.from_numpy(np.load("b2.npy")).float().to(dev),
+            torch.from_numpy(np.load("W3.npy")).float().to(dev),
+            torch.from_numpy(np.load("b3.npy")).float().to(dev)
+        )
+
+        self.step = 0
+        
     
     def update_ui(self):
         for face in self.faces:
