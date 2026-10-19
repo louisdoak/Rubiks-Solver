@@ -221,7 +221,7 @@ def _build_perms():
     FACES = ["U", "D", "F", "B", "L", "R"]
     ACTIONS = ["L", "L'", "R", "R'", "U", "U'", "D", "D'", "F", "F'", "B", "B'"]
     """Move m sends new_state[i] = old_state[perm[m][i]]. Found by rotating a cube
-    whose 54 stickers are labelled 0..53, using YOUR rotations.rotate."""
+    whose 54 stickers are labelled 0..53, using rotations.rotate."""
     labelled = {f: [[k*9 + r*3 + c for c in range(3)] for r in range(3)] for k, f in enumerate(FACES)}
     perms = []
     for m in ACTIONS:

@@ -16,7 +16,6 @@ class App(tk.Tk):
         self.resizable(True, True)
         self.loadWeights = tk.BooleanVar()
 
-        # Easy-to-edit face colors
         self.color_map = {
             "W": "white",
             "Y": "yellow",
@@ -26,7 +25,6 @@ class App(tk.Tk):
             "B": "blue",
         }
 
-        # Cube state (editable)
         self.faces = {
             "U": [["Y"]*3 for _ in range(3)],
             "D": [["W"]*3 for _ in range(3)],
@@ -36,7 +34,7 @@ class App(tk.Tk):
             "R": [["O"]*3 for _ in range(3)],
         }
 
-        self.buttons = {}  # store button refs
+        self.buttons = {}
         
         self._build_functions_toolbar()
         self._build_main()

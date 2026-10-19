@@ -38,7 +38,7 @@ def accuracy_by_depth(X, y_onehot, W1, b1, W2, b2, W3, b3, scramble_len=20):
         A1 = Z1.clamp(min=0)
         Z2 = A1 @ W2 + b2
         A2 = Z2.clamp(min=0)
-        Z3 = A2 @ W3 + b3          # no softmax needed: biggest logit = biggest probability
+        Z3 = A2 @ W3 + b3
 
         correct = (Z3.argmax(dim=1) == y_onehot.argmax(dim=1)).float()
 
